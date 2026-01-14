@@ -11,13 +11,78 @@ M.defaults = {
   height = 20,                    -- height when stacked
   auto_close = false,             -- auto close after running task
   focus_on_open = true,           -- focus task hub when opened
-  auto_detect_tasks = true,       -- auto-detect common tasks (build, test, etc.)
 
   -- Task file settings
   task_files = {
     '.nvim/tasks.lua',
     'tasks.lua',
     '.vscode/tasks.json',         -- fallback compatibility
+  },
+
+  -- Auto-detection settings
+  auto_detect = {
+    enabled = true,  -- Master switch for auto-detection
+
+    -- Per-language/tool configuration
+    languages = {
+      python = {
+        enabled = true,
+        scripts = true,        -- Detect .py files with __main__
+        pytest = true,         -- Detect pytest tests
+        requirements = true,   -- pip install from requirements.txt
+      },
+      cmake = {
+        enabled = true,
+        targets = true,        -- Parse CMakeLists.txt for targets
+      },
+      node = {
+        enabled = true,
+        package_scripts = true, -- package.json scripts
+      },
+      bash = {
+        enabled = true,
+        scripts = true,        -- Detect .sh executable scripts
+      },
+      make = {
+        enabled = true,
+        targets = true,        -- Parse Makefile targets
+      },
+      docker = {
+        enabled = true,
+        compose = true,        -- docker-compose.yml services
+      },
+      cargo = {
+        enabled = true,
+        targets = true,        -- Rust Cargo.toml
+      },
+      go = {
+        enabled = true,
+        packages = true,       -- Go packages
+      },
+    },
+
+    -- Scanning options
+    scan = {
+      depth = 3,                           -- Max directory depth
+      exclude = {                          -- Patterns to exclude
+        'node_modules', '.git', 'build', 'dist', '__pycache__',
+        '.venv', 'venv', '.env', 'target', '.next', '.cache',
+      },
+      cache_ttl = 300,                     -- Cache for 5 minutes (seconds)
+    },
+
+    -- Organization options
+    grouping = {
+      auto_group = true,                   -- Create groups by language
+      group_prefix = '',                   -- Prefix for auto-groups (e.g., "Auto: ")
+      merge_with_custom = false,           -- Mix with user tasks or separate
+    },
+
+    -- Sorting options
+    sort = {
+      custom_tasks = 'user_order',         -- "user_order" or "alphabetical"
+      auto_tasks = 'alphabetical',         -- How to sort auto-detected
+    },
   },
 
   -- Keymaps (buffer local in task hub window)
@@ -42,6 +107,7 @@ M.defaults = {
     group_collapsed = '▸',
     has_inputs = '',
     composite = '',
+    auto_detected = '󰚰',      -- Auto-detected task indicator
     spinner = { '⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏' },
   },
 

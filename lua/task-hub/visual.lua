@@ -285,8 +285,9 @@ function M.format_task_line(task, indent, status)
   local icon = M.get_task_icon(task, status)
   local has_inputs = M.task_has_inputs(task) and ' ' .. config.icons.has_inputs or ''
   local composite = task.type == 'composite' and ' ' .. config.icons.composite or ''
+  local auto_detected = task.auto_detected and ' ' .. (config.icons.auto_detected or '󰚰') or ''
 
-  return string.format('%s%s %s%s%s', indent, icon, task.name, has_inputs, composite)
+  return string.format('%s%s %s%s%s%s', indent, icon, task.name, has_inputs, composite, auto_detected)
 end
 
 -- Check if task has inputs

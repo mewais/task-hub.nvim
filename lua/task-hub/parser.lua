@@ -117,44 +117,104 @@ end
 
 -- Load and parse the task file
 function M.load_tasks()
+  local config = require('task-hub.config').get()
   local filepath = M.find_task_file()
 
-  if not filepath then
-    return nil, 'No task file found. Create .nvim/tasks.lua or tasks.lua in project root'
+  -- Load user-defined tasks
+  local user_module = {tasks = {}, groups = {}, inputs = {}}
+  local err = nil
+
+  if filepath then
+    -- Determine file type and load accordingly
+    if filepath:match('%.lua$') then
+      user_module, err = M.load_lua_file(filepath)
+    elseif filepath:match('%.json$') then
+      user_module, err = M.load_json_file(filepath)
+    else
+      return nil, 'Unknown file format: ' .. filepath
+    end
+
+    if err then
+      return nil, err
+    end
+
+    -- Validate structure
+    local valid, validation_err = M.validate_tasks(user_module)
+    if not valid then
+      return nil, validation_err
+    end
   end
 
-  local tasks_module, err
+  -- Add default groups and inputs if not present
+  if not user_module.groups then
+    user_module.groups = {}
+  end
+  if not user_module.inputs then
+    user_module.inputs = {}
+  end
 
-  -- Determine file type and load accordingly
-  if filepath:match('%.lua$') then
-    tasks_module, err = M.load_lua_file(filepath)
-  elseif filepath:match('%.json$') then
-    tasks_module, err = M.load_json_file(filepath)
+  -- Detect auto tasks if enabled
+  local auto_module = {tasks = {}, groups = {}}
+  if config.auto_detect.enabled then
+    local detector = require('task-hub.detector')
+    auto_module = detector.detect_all_tasks(vim.fn.getcwd(), config.auto_detect)
+  end
+
+  -- Merge user and auto tasks
+  local merged = M.merge_task_modules(user_module, auto_module, config)
+
+  return merged, nil
+end
+
+-- Merge user-defined and auto-detected tasks
+function M.merge_task_modules(user_module, auto_module, config)
+  local result = {tasks = {}, groups = {}, inputs = {}}
+
+  -- Copy user inputs
+  result.inputs = user_module.inputs or {}
+
+  -- Merge tasks and groups based on configuration
+  if config.auto_detect.grouping.merge_with_custom then
+    -- Mixed mode: combine into same groups
+    result.tasks = vim.list_extend(vim.deepcopy(user_module.tasks or {}), auto_module.tasks or {})
+
+    -- Merge groups
+    result.groups = vim.deepcopy(user_module.groups or {})
+    for name, tasks in pairs(auto_module.groups or {}) do
+      result.groups[name] = tasks
+    end
   else
-    return nil, 'Unknown file format: ' .. filepath
+    -- Separate mode: user tasks first, then auto tasks in separate groups
+    result.tasks = vim.deepcopy(user_module.tasks or {})
+    vim.list_extend(result.tasks, auto_module.tasks or {})
+
+    -- User groups first
+    result.groups = vim.deepcopy(user_module.groups or {})
+
+    -- Add auto groups with prefix
+    for name, tasks in pairs(auto_module.groups or {}) do
+      local group_name = config.auto_detect.grouping.group_prefix .. name
+      result.groups[group_name] = tasks
+    end
   end
 
-  if err then
-    return nil, err
+  -- Apply sorting to custom tasks if configured
+  if config.auto_detect.sort.custom_tasks == 'alphabetical' and #(user_module.tasks or {}) > 0 then
+    -- Sort only user tasks (first N tasks)
+    local user_task_count = #(user_module.tasks or {})
+    local user_tasks = vim.list_slice(result.tasks, 1, user_task_count)
+
+    table.sort(user_tasks, function(a, b)
+      return a.name < b.name
+    end)
+
+    -- Replace sorted portion
+    for i, task in ipairs(user_tasks) do
+      result.tasks[i] = task
+    end
   end
 
-  -- Validate structure
-  local valid, validation_err = M.validate_tasks(tasks_module)
-  if not valid then
-    return nil, validation_err
-  end
-
-  -- Add default groups if not present
-  if not tasks_module.groups then
-    tasks_module.groups = {}
-  end
-
-  -- Add default inputs if not present
-  if not tasks_module.inputs then
-    tasks_module.inputs = {}
-  end
-
-  return tasks_module, nil
+  return result
 end
 
 -- Substitute variables in a string
