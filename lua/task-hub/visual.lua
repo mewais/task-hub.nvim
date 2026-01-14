@@ -294,10 +294,7 @@ end
 function M.task_has_inputs(task)
   local parser = require('task-hub.parser')
   local refs = parser.find_input_references(task)
-  for _ in pairs(refs) do
-    return true
-  end
-  return false
+  return #refs > 0
 end
 
 -- Format group separator line

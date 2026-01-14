@@ -276,33 +276,45 @@ function M.get_task_by_name(tasks_module, name)
   return nil
 end
 
--- Find all input references in a task
+-- Find all input references in a task (preserves order of appearance)
 function M.find_input_references(task)
   local references = {}
+  local seen = {}  -- Track which inputs we've already added
 
-  -- Helper to extract input names from string
+  -- Helper to extract input names from string (in order of appearance)
   local function extract_inputs(str)
     if type(str) ~= 'string' then
       return
     end
     for input_name in str:gmatch('${input:([^}]+)}') do
-      references[input_name] = true
+      if not seen[input_name] then
+        table.insert(references, input_name)
+        seen[input_name] = true
+      end
     end
   end
 
-  -- Check command
+  -- Check command first
   if task.command then
     extract_inputs(task.command)
   end
 
-  -- Check environment variables
+  -- Check environment variables in sorted key order for consistency
   if task.env then
-    for _, value in pairs(task.env) do
-      extract_inputs(value)
+    -- Get env keys and sort them for deterministic order
+    local env_keys = {}
+    for key in pairs(task.env) do
+      table.insert(env_keys, key)
+    end
+    table.sort(env_keys)
+
+    -- Extract inputs in sorted env key order
+    for _, key in ipairs(env_keys) do
+      extract_inputs(task.env[key])
     end
   end
 
-  -- Check cwd
+  -- Check cwd last
   if task.cwd then
     extract_inputs(task.cwd)
   end

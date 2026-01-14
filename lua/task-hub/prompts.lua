@@ -182,17 +182,8 @@ function M.collect_inputs(task, inputs_config, callback)
   inputs_config = inputs_config or {}
   local parser = require('task-hub.parser')
 
-  -- Find all required inputs
-  local required_inputs = parser.find_input_references(task)
-
-  -- Convert to array for sequential prompting
-  local input_names = {}
-  for name in pairs(required_inputs) do
-    table.insert(input_names, name)
-  end
-
-  -- Sort for consistent ordering
-  table.sort(input_names)
+  -- Find all required inputs (in order of appearance)
+  local input_names = parser.find_input_references(task)
 
   -- If no inputs required, call callback immediately
   if #input_names == 0 then
