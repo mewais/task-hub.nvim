@@ -28,12 +28,66 @@ function M.create_buffer()
   M.buf = vim.api.nvim_create_buf(false, true)
   vim.api.nvim_buf_set_name(M.buf, 'Task Hub')
 
-  -- Buffer options
+  -- Buffer options - make it a special immutable buffer
   vim.bo[M.buf].buftype = 'nofile'
   vim.bo[M.buf].bufhidden = 'hide'
   vim.bo[M.buf].swapfile = false
   vim.bo[M.buf].filetype = 'taskhub'
   vim.bo[M.buf].modifiable = false
+  vim.bo[M.buf].buflisted = false  -- Don't show in buffer list
+
+  -- Create autocmd to prevent files from being opened in this buffer
+  vim.api.nvim_create_autocmd('BufWinEnter', {
+    buffer = M.buf,
+    callback = function()
+      -- Set window-specific options
+      if M.win and vim.api.nvim_win_is_valid(M.win) then
+        vim.wo[M.win].winfixwidth = true   -- Fixed width
+        vim.wo[M.win].number = false       -- No line numbers
+        vim.wo[M.win].relativenumber = false
+        vim.wo[M.win].signcolumn = 'no'    -- No sign column
+        vim.wo[M.win].foldcolumn = '0'     -- No fold column
+        vim.wo[M.win].spell = false        -- No spell check
+        vim.wo[M.win].scrollbind = false   -- Don't sync scrolling with other windows
+        vim.wo[M.win].cursorbind = false   -- Don't sync cursor position with other windows
+      end
+    end,
+  })
+
+  -- Prevent any buffer from being loaded into task hub window
+  vim.api.nvim_create_autocmd('BufEnter', {
+    callback = function(args)
+      -- If someone tries to open a file in the task hub window
+      if M.win and vim.api.nvim_win_is_valid(M.win) then
+        local current_win = vim.api.nvim_get_current_win()
+        local current_buf = vim.api.nvim_get_current_buf()
+
+        -- If we're in the task hub window but not showing the task hub buffer
+        if current_win == M.win and current_buf ~= M.buf then
+          -- Find a suitable window to open the buffer in
+          for _, win in ipairs(vim.api.nvim_list_wins()) do
+            if win ~= M.win then
+              local win_config = vim.api.nvim_win_get_config(win)
+              if win_config.relative == '' then  -- Not a floating window
+                -- Switch to that window and show the buffer there
+                vim.api.nvim_set_current_win(win)
+                vim.api.nvim_win_set_buf(win, current_buf)
+                -- Restore task hub buffer in task hub window
+                vim.api.nvim_win_set_buf(M.win, M.buf)
+                return
+              end
+            end
+          end
+
+          -- If no suitable window found, create a vertical split
+          vim.cmd('vsplit')
+          vim.api.nvim_win_set_buf(vim.api.nvim_get_current_win(), current_buf)
+          -- Restore task hub buffer
+          vim.api.nvim_win_set_buf(M.win, M.buf)
+        end
+      end
+    end,
+  })
 
   -- Set up keymaps
   M.setup_keymaps()
