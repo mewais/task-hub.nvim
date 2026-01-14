@@ -27,7 +27,11 @@ function M.prompt_with_nui(input_name, input_config, default_value, callback)
     end
 
     local menu = Menu({
-      position = '50%',
+      position = {
+        row = '50%',
+        col = '50%',
+      },
+      relative = 'editor',  -- Position relative to entire editor, not current window
       size = {
         width = 60,
         height = math.min(#items + 2, 15),
@@ -48,11 +52,11 @@ function M.prompt_with_nui(input_name, input_config, default_value, callback)
       keymap = {
         focus_next = { 'j', '<Down>', '<Tab>' },
         focus_prev = { 'k', '<Up>', '<S-Tab>' },
-        close = { '<Esc>', '<C-c>', 'q' },
+        close = { '<Esc>', '<C-c>' },  -- Removed 'q' - can be part of user input
         submit = { '<CR>', '<Space>' },
       },
       on_close = function()
-        callback(default_value)
+        callback(nil)  -- Return nil to signal cancellation
       end,
       on_submit = function(item)
         callback(item.text)
@@ -66,7 +70,11 @@ function M.prompt_with_nui(input_name, input_config, default_value, callback)
     local Input = require('nui.input')
 
     local input = Input({
-      position = '50%',
+      position = {
+        row = '50%',
+        col = '50%',
+      },
+      relative = 'editor',  -- Position relative to entire editor, not current window
       size = {
         width = 60,
         height = 1,
@@ -85,12 +93,23 @@ function M.prompt_with_nui(input_name, input_config, default_value, callback)
       prompt = '> ',
       default_value = default_value or '',
       on_close = function()
-        callback(default_value)
+        callback(nil)  -- Return nil to signal cancellation
       end,
       on_submit = function(value)
         callback(value)
       end,
     })
+
+    -- Add escape key mapping for cancellation
+    input:map('i', '<Esc>', function()
+      callback(nil)
+      input:unmount()
+    end, { noremap = true })
+
+    input:map('i', '<C-c>', function()
+      callback(nil)
+      input:unmount()
+    end, { noremap = true })
 
     input:mount()
   else
@@ -118,7 +137,8 @@ function M.prompt_with_vim_ui(input_name, input_config, default_value, callback)
         return tostring(item)
       end,
     }, function(choice)
-      callback(choice or default_value)
+      -- choice is nil when cancelled, pass it through
+      callback(choice)
     end)
 
   elseif input_type == 'prompt' or input_type == 'promptString' then
@@ -127,7 +147,8 @@ function M.prompt_with_vim_ui(input_name, input_config, default_value, callback)
       prompt = (input_config.prompt or input_name) .. ': ',
       default = default_value or '',
     }, function(input)
-      callback(input or default_value)
+      -- input is nil when cancelled, pass it through
+      callback(input)
     end)
 
   else
@@ -204,6 +225,12 @@ function M.collect_inputs(task, inputs_config, callback)
     local input_config = inputs_config[input_name]
 
     M.prompt_input(input_name, input_config, function(value)
+      -- If value is nil, user cancelled - abort the entire input collection
+      if value == nil then
+        callback(nil)  -- Signal cancellation to caller
+        return
+      end
+
       input_values[input_name] = value
       prompt_next(index + 1)
     end)

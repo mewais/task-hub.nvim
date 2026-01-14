@@ -171,7 +171,7 @@ function M.merge_task_modules(user_module, auto_module, config)
   local result = {tasks = {}, groups = {}, inputs = {}}
 
   -- Copy user inputs
-  result.inputs = user_module.inputs or {}
+  result.inputs = vim.deepcopy(user_module.inputs or {})
 
   -- Merge tasks and groups based on configuration
   if config.auto_detect.grouping.merge_with_custom then
@@ -195,6 +195,15 @@ function M.merge_task_modules(user_module, auto_module, config)
     for name, tasks in pairs(auto_module.groups or {}) do
       local group_name = config.auto_detect.grouping.group_prefix .. name
       result.groups[group_name] = tasks
+    end
+  end
+
+  -- Merge auto-detected inputs from tasks
+  for _, task in ipairs(result.tasks) do
+    if task.auto_inputs then
+      for input_id, input_def in pairs(task.auto_inputs) do
+        result.inputs[input_id] = input_def
+      end
     end
   end
 

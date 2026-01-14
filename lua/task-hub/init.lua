@@ -76,6 +76,12 @@ function M.run_task_by_name(task_name)
 
   -- Collect inputs and execute
   prompts.collect_inputs(task, tasks_module.inputs or {}, function(input_values)
+    -- If input_values is nil, user cancelled
+    if input_values == nil then
+      vim.notify('task-hub: Task cancelled', vim.log.levels.INFO)
+      return
+    end
+
     executor.execute_task(task, tasks_module, input_values)
   end)
 end

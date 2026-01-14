@@ -96,6 +96,7 @@ end
 -- Detect Python tasks
 function M.detect_python(root_dir, opts)
   local tasks = {}
+  local argparser = require('task-hub.argparser')
 
   -- Find Python scripts with __main__
   if opts.scripts then
@@ -114,13 +115,23 @@ function M.detect_python(root_dir, opts)
 
       if has_main then
         local script_name = filepath:match('([^/]+)%.py$')
-        table.insert(tasks, {
+        local task = {
           name = 'Run ' .. script_name,
           command = 'python3 ' .. filepath,
           cwd = root_dir,
           auto_detected = true,
           auto_source = 'python',
-        })
+          script_file = filepath,  -- Store for argument parsing
+        }
+
+        -- Parse script arguments
+        local args = argparser.parse_script_args(filepath)
+        if #args > 0 then
+          task = argparser.add_args_to_command(task, args)
+          task.auto_inputs = argparser.generate_inputs(args, task.name)
+        end
+
+        table.insert(tasks, task)
       end
     end
   end
@@ -306,6 +317,7 @@ end
 -- Detect Bash scripts
 function M.detect_bash(root_dir, opts)
   local tasks = {}
+  local argparser = require('task-hub.argparser')
 
   if not opts.scripts then
     return tasks
@@ -316,13 +328,23 @@ function M.detect_bash(root_dir, opts)
   for _, filepath in ipairs(sh_files) do
     if is_executable(filepath) then
       local script_name = filepath:match('([^/]+)%.sh$')
-      table.insert(tasks, {
+      local task = {
         name = 'Run ' .. script_name,
         command = filepath,
         cwd = root_dir,
         auto_detected = true,
         auto_source = 'bash',
-      })
+        script_file = filepath,  -- Store for argument parsing
+      }
+
+      -- Parse script arguments
+      local args = argparser.parse_script_args(filepath)
+      if #args > 0 then
+        task = argparser.add_args_to_command(task, args)
+        task.auto_inputs = argparser.generate_inputs(args, task.name)
+      end
+
+      table.insert(tasks, task)
     end
   end
 

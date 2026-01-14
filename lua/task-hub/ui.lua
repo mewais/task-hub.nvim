@@ -68,10 +68,19 @@ function M.setup_keymaps()
     M.refresh()
   end, vim.tbl_extend('force', opts, { desc = 'Refresh tasks' }))
 
-  -- Double-click to expand groups/composites
+  -- Double-click: run task, or toggle group/composite
   vim.keymap.set('n', '<2-LeftMouse>', function()
-    M.toggle_item_under_cursor()
-  end, vim.tbl_extend('force', opts, { desc = 'Toggle expand on double-click' }))
+    local item = M.get_item_under_cursor()
+    if not item then return end
+
+    -- If it's a group or composite, toggle expand
+    if item.type == 'group' or (item.type == 'task' and item.task.type == 'composite') then
+      M.toggle_item_under_cursor()
+    -- Otherwise, run the task
+    elseif item.type == 'task' or item.type == 'subtask' then
+      M.run_item_under_cursor()
+    end
+  end, vim.tbl_extend('force', opts, { desc = 'Double-click to run task or toggle group' }))
 end
 
 -- Find existing sidebar window (generic detection)
@@ -434,6 +443,12 @@ function M.run_item_under_cursor()
 
   -- Collect inputs and execute
   prompts.collect_inputs(task, M.tasks_module.inputs or {}, function(input_values)
+    -- If input_values is nil, user cancelled
+    if input_values == nil then
+      vim.notify('task-hub: Task cancelled', vim.log.levels.INFO)
+      return
+    end
+
     executor.execute_task(task, M.tasks_module, input_values)
   end)
 end
