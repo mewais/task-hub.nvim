@@ -40,8 +40,120 @@ M.defaults = {
     task_pending = '○',
     group_expanded = '▾',
     group_collapsed = '▸',
-    has_inputs = '[...]',
-    composite = '⚡',
+    has_inputs = '',
+    composite = '',
+    spinner = { '⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏' },
+  },
+
+  -- Task type icons (Nerd Font icons for auto-detection)
+  task_type_icons = {
+    -- Build & Compilation
+    build = '󰇙',       -- hammer
+    make = '󰇙',
+    compile = '󰇙',
+    cmake = '󰘳',       -- cmake specific
+
+    -- Testing & QA
+    test = '󰙨',        -- flask
+    pytest = '󰙨',
+    jest = '󰙨',
+    regression = '󰙨',
+    lint = '󰁨',        -- checkmark in circle
+    format = '󰉼',      -- format icon
+
+    -- Deployment
+    deploy = '󰐱',      -- rocket
+    release = '󰐱',
+    publish = '󰐱',
+
+    -- Cleanup
+    clean = '󰃢',       -- trash
+    cleanup = '󰃢',
+    remove = '󰃢',
+
+    -- Debug
+    debug = '󰃤',       -- bug
+
+    -- Languages
+    python = '󰌠',      -- python
+    node = '󰎙',        -- nodejs
+    npm = '󰎙',
+    yarn = '󰎙',
+    bash = '',        -- terminal
+    go = '󰟓',          -- go
+    rust = '󱘗',        -- rust
+
+    -- Containers & Orchestration
+    docker = '󰡨',      -- docker
+    kubernetes = '󱃾',
+    kubectl = '󱃾',
+
+    -- Version Control
+    git = '󰊢',         -- git
+
+    -- Execution
+    run = '󰐊',         -- play
+    start = '󰐊',
+    execute = '󰐊',
+
+    -- Package Management
+    install = '󰇚',     -- download
+    update = '󰚰',      -- update arrows
+
+    -- Validation
+    verify = '󰄬',      -- checkmark
+    validate = '󰄬',
+
+    -- Generation
+    generate = '󰈔',    -- file
+  },
+
+  -- Highlight groups (will use user's theme colors)
+  highlights = {
+    title = 'Title',
+    group = 'Directory',           -- Groups: distinct color (blue/cyan)
+    task_level_0 = 'Normal',       -- Top-level tasks
+    task_level_1 = 'Comment',      -- Tasks in groups (slightly dimmed)
+    task_level_2 = 'NonText',      -- Subtasks (more dimmed)
+    task_running = 'DiagnosticInfo',
+    task_success = 'DiagnosticOk',
+    task_failed = 'DiagnosticError',
+    task_stopped = 'DiagnosticWarn',
+    separator = 'Comment',
+    footer = 'Comment',
+    composite = 'Special',
+  },
+
+  -- Icon colors (set to nil to use task text color)
+  icon_colors = {
+    -- Languages (use their brand colors)
+    python = { fg = '#3776AB' },      -- Python blue
+    node = { fg = '#68A063' },        -- Node green
+    npm = { fg = '#CB3837' },         -- npm red
+    go = { fg = '#00ADD8' },          -- Go cyan
+    rust = { fg = '#CE422B' },        -- Rust orange
+    bash = { fg = '#89E051' },        -- Bash/terminal green
+
+    -- Build tools
+    build = { fg = '#FFA500' },       -- Orange
+    cmake = { fg = '#064F8C' },       -- CMake blue
+
+    -- Testing (purple/magenta)
+    test = { fg = '#C678DD' },        -- Purple
+    regression = { fg = '#C678DD' },
+
+    -- Git (orange/red)
+    git = { fg = '#F05032' },
+
+    -- Docker (blue)
+    docker = { fg = '#2496ED' },
+    kubernetes = { fg = '#326CE5' },
+
+    -- Status-based (use semantic colors)
+    debug = { fg = '#E06C75' },       -- Red for debug
+    clean = { fg = '#98C379' },       -- Green for clean
+    verify = { fg = '#61AFEF' },      -- Blue for verify
+    deploy = { fg = '#E5C07B' },      -- Yellow for deploy
   },
 
   -- Terminal settings
@@ -74,6 +186,14 @@ function M.has_nui()
   return pcall(require, 'nui.menu') and pcall(require, 'nui.input')
 end
 
+-- Setup icon highlight groups
+local function setup_icon_highlights(icon_colors)
+  for icon_type, color_spec in pairs(icon_colors) do
+    local hl_name = 'TaskHubIcon' .. icon_type:sub(1, 1):upper() .. icon_type:sub(2)
+    vim.api.nvim_set_hl(0, hl_name, color_spec)
+  end
+end
+
 -- Setup function to merge user config with defaults
 function M.setup(user_config)
   M.options = vim.tbl_deep_extend('force', M.defaults, user_config or {})
@@ -87,6 +207,9 @@ function M.setup(user_config)
     )
     M.options.ui.use_nui = false
   end
+
+  -- Set up icon highlight groups
+  setup_icon_highlights(M.options.icon_colors)
 
   -- Set up global keymap for toggle
   if M.options.keymaps.toggle then

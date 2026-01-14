@@ -7,6 +7,7 @@ local config = require('task-hub.config')
 local parser = require('task-hub.parser')
 local executor = require('task-hub.executor')
 local prompts = require('task-hub.prompts')
+local visual = require('task-hub.visual')
 
 -- UI state
 M.buf = nil
@@ -66,6 +67,11 @@ function M.setup_keymaps()
   vim.keymap.set('n', cfg.keymaps.refresh, function()
     M.refresh()
   end, vim.tbl_extend('force', opts, { desc = 'Refresh tasks' }))
+
+  -- Double-click to expand groups/composites
+  vim.keymap.set('n', '<2-LeftMouse>', function()
+    M.toggle_item_under_cursor()
+  end, vim.tbl_extend('force', opts, { desc = 'Toggle expand on double-click' }))
 end
 
 -- Find existing sidebar window (generic detection)
@@ -143,6 +149,9 @@ function M.open_window()
   -- Load and display tasks
   M.refresh()
 
+  -- Start spinner animation if there are running tasks
+  visual.start_spinner()
+
   -- Return focus if configured
   if not cfg.focus_on_open then
     vim.api.nvim_set_current_win(original_win)
@@ -151,31 +160,10 @@ function M.open_window()
   return M.win
 end
 
--- Get status icon for a task
+-- Get status icon for a task (delegated to visual module)
 function M.get_task_icon(task)
-  local cfg = config.get()
   local status = executor.get_task_status(task.name)
-
-  if status == 'running' then
-    return cfg.icons.task_running
-  elseif status == 'success' then
-    return cfg.icons.task_success
-  elseif status == 'failed' then
-    return cfg.icons.task_failed
-  elseif status == 'stopped' then
-    return cfg.icons.task_stopped
-  else
-    return cfg.icons.task_idle
-  end
-end
-
--- Check if task has inputs
-function M.task_has_inputs(task)
-  local refs = parser.find_input_references(task)
-  for _ in pairs(refs) do
-    return true
-  end
-  return false
+  return visual.get_task_icon(task, status)
 end
 
 -- Build display lines
@@ -184,8 +172,10 @@ function M.build_display_lines()
   M.line_to_item = {}
   local cfg = config.get()
 
-  -- Header
-  table.insert(lines, 'Task Hub')
+  -- Header with status summary
+  local status_summary = visual.get_status_summary()
+  local header = status_summary ~= '' and 'Task Hub  ' .. status_summary or 'Task Hub'
+  table.insert(lines, header)
   table.insert(lines, '')
 
   if not M.tasks_module or not M.tasks_module.tasks or #M.tasks_module.tasks == 0 then
@@ -197,17 +187,15 @@ function M.build_display_lines()
     -- Display ungrouped tasks first
     for _, task in ipairs(organized.ungrouped) do
       local line_num = #lines + 1
-      local icon = M.get_task_icon(task)
-      local has_inputs = M.task_has_inputs(task) and ' ' .. cfg.icons.has_inputs or ''
-      local composite = task.type == 'composite' and ' ' .. cfg.icons.composite or ''
+      local status = executor.get_task_status(task.name)
+      local line = visual.format_task_line(task, '', status)
 
-      local line = string.format('%s %s%s%s', icon, task.name, has_inputs, composite)
       table.insert(lines, line)
-      M.line_to_item[line_num] = { type = 'task', task = task }
+      M.line_to_item[line_num] = { type = 'task', task = task, level = 0 }
 
       -- Show composite subtasks if expanded
       if task.type == 'composite' and M.expanded_composites[task.name] then
-        M.add_composite_subtasks(lines, task, '  ')
+        M.add_composite_subtasks(lines, task, '', 1)
       end
     end
 
@@ -229,17 +217,15 @@ function M.build_display_lines()
         if M.expanded_groups[group_name] then
           for _, task in ipairs(tasks) do
             local task_line_num = #lines + 1
-            local icon = M.get_task_icon(task)
-            local has_inputs = M.task_has_inputs(task) and ' ' .. cfg.icons.has_inputs or ''
-            local composite = task.type == 'composite' and ' ' .. cfg.icons.composite or ''
+            local status = executor.get_task_status(task.name)
+            local task_line = visual.format_task_line(task, '  ', status)
 
-            local task_line = string.format('  %s %s%s%s', icon, task.name, has_inputs, composite)
             table.insert(lines, task_line)
-            M.line_to_item[task_line_num] = { type = 'task', task = task }
+            M.line_to_item[task_line_num] = { type = 'task', task = task, level = 1 }
 
             -- Show composite subtasks if expanded
             if task.type == 'composite' and M.expanded_composites[task.name] then
-              M.add_composite_subtasks(lines, task, '    ')
+              M.add_composite_subtasks(lines, task, '  ', 2)
             end
           end
         end
@@ -267,24 +253,30 @@ function M.build_display_lines()
 end
 
 -- Add composite subtasks to display
-function M.add_composite_subtasks(lines, task, indent)
+function M.add_composite_subtasks(lines, task, indent, level)
   local cfg = config.get()
 
   if not task.tasks then
     return
   end
 
-  for _, subtask_name in ipairs(task.tasks) do
+  local subtask_count = #task.tasks
+
+  for i, subtask_name in ipairs(task.tasks) do
     local subtask = parser.get_task_by_name(M.tasks_module, subtask_name)
     local line_num = #lines + 1
+    local is_last = (i == subtask_count)
+
+    -- Use proper tree corners: ├─ for middle items, └─ for last item
+    local connector = is_last and '└─' or '├─'
 
     if subtask then
       local icon = M.get_task_icon(subtask)
-      local line = string.format('%s├─ %s %s', indent, icon, subtask_name)
+      local line = string.format('%s%s %s %s', indent, connector, icon, subtask_name)
       table.insert(lines, line)
-      M.line_to_item[line_num] = { type = 'subtask', task = subtask, parent = task.name }
+      M.line_to_item[line_num] = { type = 'subtask', task = subtask, parent = task.name, level = level }
     else
-      local line = string.format('%s├─ %s %s (not found)', indent, cfg.icons.task_failed, subtask_name)
+      local line = string.format('%s%s %s %s (not found)', indent, connector, cfg.icons.task_failed, subtask_name)
       table.insert(lines, line)
     end
   end
@@ -337,37 +329,58 @@ function M.apply_highlighting()
     return
   end
 
-  local ns = vim.api.nvim_create_namespace('TaskHub')
-  vim.api.nvim_buf_clear_namespace(M.buf, ns, 0, -1)
+  local ns_text = vim.api.nvim_create_namespace('TaskHubText')
+  local ns_icons = vim.api.nvim_create_namespace('TaskHubIcons')
+  vim.api.nvim_buf_clear_namespace(M.buf, ns_text, 0, -1)
+  vim.api.nvim_buf_clear_namespace(M.buf, ns_icons, 0, -1)
+
+  -- Set higher priority for icon namespace
+  vim.api.nvim_set_decoration_provider(ns_icons, {})
 
   local lines = vim.api.nvim_buf_get_lines(M.buf, 0, -1, false)
 
   for i, line in ipairs(lines) do
     local line_num = i - 1
+    local item = M.line_to_item[i]
 
-    -- Highlight header
-    if line:match('^Task Hub') then
-      vim.api.nvim_buf_add_highlight(M.buf, ns, 'Title', line_num, 0, -1)
+    -- Apply text highlighting (entire line)
+    local hl_group = visual.get_line_highlight(line, item)
+    if hl_group then
+      vim.api.nvim_buf_add_highlight(M.buf, ns_text, hl_group, line_num, 0, -1)
     end
 
-    -- Highlight separator
-    if line:match('^─') then
-      vim.api.nvim_buf_add_highlight(M.buf, ns, 'Comment', line_num, 0, -1)
-    end
+    -- Apply icon-specific coloring for tasks and subtasks (higher priority)
+    if item and (item.type == 'task' or item.type == 'subtask') and item.task then
+      local icon_type = visual.get_icon_type(item.task)
+      if icon_type then
+        -- Find the icon position
+        -- For subtasks: after tree connectors (├─ or └─), before task name
+        -- For tasks: after indent, before task name
+        local icon_start, icon_end
 
-    -- Highlight running tasks
-    if line:match('▶') then
-      vim.api.nvim_buf_add_highlight(M.buf, ns, 'DiagnosticInfo', line_num, 0, -1)
-    end
+        if item.type == 'subtask' then
+          -- Subtask line format: "  ├─ 󰌠 Generate All"
+          -- Find the tree connector, then find the icon after it
+          local connector_end = line:find('[├└]─ ')
+          if connector_end then
+            -- Icon starts after "├─ " or "└─ " (connector + "─ ")
+            icon_start = connector_end + 3  -- Skip past the 3-byte tree char and "─ "
+            icon_end = icon_start + 3
+          end
+        else
+          -- Regular task line format: "󰌠 Generate All"
+          local indent_end = line:find('%S')
+          if indent_end then
+            icon_start = indent_end - 1
+            icon_end = indent_end + 3
+          end
+        end
 
-    -- Highlight success
-    if line:match('✓') then
-      vim.api.nvim_buf_add_highlight(M.buf, ns, 'DiagnosticOk', line_num, 0, -1)
-    end
-
-    -- Highlight errors
-    if line:match('✗') then
-      vim.api.nvim_buf_add_highlight(M.buf, ns, 'DiagnosticError', line_num, 0, -1)
+        if icon_start and icon_end then
+          local hl_name = 'TaskHubIcon' .. icon_type:sub(1, 1):upper() .. icon_type:sub(2)
+          vim.api.nvim_buf_add_highlight(M.buf, ns_icons, hl_name, line_num, icon_start, icon_end)
+        end
+      end
     end
   end
 end
@@ -435,6 +448,9 @@ function M.close()
     vim.api.nvim_win_close(M.win, true)
     M.win = nil
   end
+
+  -- Stop spinner when window is closed
+  visual.stop_spinner()
 end
 
 -- Toggle task hub

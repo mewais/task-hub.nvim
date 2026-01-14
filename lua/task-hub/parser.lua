@@ -256,6 +256,16 @@ function M.organize_tasks(tasks_module)
     end
   end
 
+  -- Create a set of tasks that are subtasks of composite tasks
+  local subtask_names = {}
+  for _, task in ipairs(tasks_module.tasks) do
+    if task.type == 'composite' and task.tasks then
+      for _, subtask_name in ipairs(task.tasks) do
+        subtask_names[subtask_name] = true
+      end
+    end
+  end
+
   -- Organize tasks
   for _, task in ipairs(tasks_module.tasks) do
     local group_name = grouped_tasks[task.name]
@@ -266,7 +276,10 @@ function M.organize_tasks(tasks_module)
       end
       table.insert(organized.grouped[group_name], task)
     else
-      table.insert(organized.ungrouped, task)
+      -- Only show ungrouped if it's not a subtask of a composite
+      if not subtask_names[task.name] then
+        table.insert(organized.ungrouped, task)
+      end
     end
   end
 
