@@ -1,0 +1,366 @@
+*task-hub.txt*  A powerful task runner for Neovim
+
+Author:  mewais
+License: MIT
+Version: 1.0.0
+
+==============================================================================
+CONTENTS                                                   *task-hub-contents*
+
+    1. Introduction ........................... |task-hub-introduction|
+    2. Requirements ........................... |task-hub-requirements|
+    3. Installation ........................... |task-hub-installation|
+    4. Configuration .......................... |task-hub-configuration|
+    5. Task Files ............................. |task-hub-task-files|
+    6. Commands ............................... |task-hub-commands|
+    7. Functions .............................. |task-hub-functions|
+    8. Keymaps ................................ |task-hub-keymaps|
+    9. Examples ............................... |task-hub-examples|
+
+==============================================================================
+1. INTRODUCTION                                        *task-hub-introduction*
+
+task-hub.nvim is a powerful and intuitive task runner for Neovim that
+provides a beautiful sidebar UI for managing and executing tasks.
+
+Features:
+  - Sidebar UI that stacks with file explorers
+  - Interactive prompts with dropdown menus (via nui.nvim)
+  - Composite tasks with serial/parallel execution
+  - Task groups for organization
+  - Input memory to remember last values
+  - Real-time terminal output
+  - VSCode tasks.json compatibility
+
+==============================================================================
+2. REQUIREMENTS                                        *task-hub-requirements*
+
+  - Neovim 0.8 or higher
+  - (Optional) nui.nvim for enhanced UI
+
+==============================================================================
+3. INSTALLATION                                        *task-hub-installation*
+
+Using lazy.nvim: >
+    {
+      'mewais/task-hub.nvim',
+      dependencies = { 'MunifTanjim/nui.nvim' },
+      config = function()
+        require('task-hub').setup()
+      end,
+    }
+<
+
+Using packer.nvim: >
+    use {
+      'mewais/task-hub.nvim',
+      requires = { 'MunifTanjim/nui.nvim' },
+      config = function()
+        require('task-hub').setup()
+      end,
+    }
+<
+
+==============================================================================
+4. CONFIGURATION                                      *task-hub-configuration*
+
+task-hub.nvim can be configured via the setup function: >
+
+    require('task-hub').setup({
+      position = 'left',
+      width = 40,
+      height = 20,
+      auto_close = false,
+      focus_on_open = true,
+
+      task_files = {
+        '.nvim/tasks.lua',
+        'tasks.lua',
+        '.vscode/tasks.json',
+      },
+
+      keymaps = {
+        toggle = '<leader>th',
+        run_task = '<CR>',
+        close = 'q',
+        refresh = 'r',
+        kill_task = 'K',
+        toggle_expand = '<Space>',
+      },
+
+      icons = {
+        task_idle = '▸',
+        task_running = '▶',
+        task_success = '✓',
+        task_failed = '✗',
+        task_stopped = '■',
+        group_expanded = '▾',
+        group_collapsed = '▸',
+        has_inputs = '[...]',
+        composite = '⚡',
+      },
+
+      terminal = {
+        position = 'bottom',
+        size = 15,
+        focus_on_run = true,
+        auto_scroll = true,
+      },
+
+      execution = {
+        remember_inputs = true,
+        stop_on_error = true,
+        parallel_limit = 4,
+      },
+
+      ui = {
+        use_nui = true,
+        border = 'rounded',
+      },
+    })
+<
+
+==============================================================================
+5. TASK FILES                                            *task-hub-task-files*
+
+Create a task file in your project root as `.nvim/tasks.lua` or `tasks.lua`.
+
+SIMPLE TASK ~
+>
+    return {
+      tasks = {
+        {
+          name = "Build",
+          command = "make build",
+        },
+      },
+    }
+<
+
+TASK WITH ENVIRONMENT VARIABLES ~
+>
+    {
+      name = "Deploy",
+      command = "kubectl apply -f deployment.yaml",
+      env = {
+        NAMESPACE = "production",
+        VERSION = "1.0.0",
+      },
+    }
+<
+
+TASK WITH INPUTS ~
+>
+    return {
+      tasks = {
+        {
+          name = "Deploy",
+          command = "deploy.sh ${input:env}",
+        },
+      },
+
+      inputs = {
+        env = {
+          type = "select",
+          prompt = "Select environment:",
+          options = { "dev", "staging", "production" },
+          default = "dev",
+        },
+      },
+    }
+<
+
+COMPOSITE TASK (SERIAL) ~
+>
+    {
+      name = "Full Build",
+      type = "composite",
+      execution = "serial",
+      stopOnError = true,
+      tasks = { "Clean", "Build", "Test" },
+    }
+<
+
+COMPOSITE TASK (PARALLEL) ~
+>
+    {
+      name = "Run All Tests",
+      type = "composite",
+      execution = "parallel",
+      tasks = { "Unit Tests", "Integration Tests" },
+    }
+<
+
+TASK GROUPS ~
+>
+    return {
+      groups = {
+        ["Build"] = { "Build Debug", "Build Release" },
+        ["Test"] = { "Unit Tests", "Integration Tests" },
+      },
+
+      tasks = {
+        -- ... task definitions
+      },
+    }
+<
+
+==============================================================================
+6. COMMANDS                                                *task-hub-commands*
+
+:TaskHub [action]                                                   *:TaskHub*
+    Main command for task-hub operations.
+
+    Actions:
+      toggle  - Toggle task hub sidebar
+      open    - Open task hub sidebar
+      close   - Close task hub sidebar
+      refresh - Refresh task list
+
+    Examples: >
+        :TaskHub toggle
+        :TaskHub open
+<
+
+:TaskHubRun {task-name}                                          *:TaskHubRun*
+    Run a task by name.
+
+    Example: >
+        :TaskHubRun Build
+<
+
+:TaskHubKill [task-name]                                        *:TaskHubKill*
+    Kill a running task. If no name is provided, kills the task under cursor.
+
+    Example: >
+        :TaskHubKill "Build"
+        :TaskHubKill
+<
+
+==============================================================================
+7. FUNCTIONS                                              *task-hub-functions*
+
+require('task-hub').setup({config})                        *task-hub.setup()*
+    Configure task-hub with custom options.
+
+    Parameters: ~
+        {config}  (table) Configuration options
+
+require('task-hub').toggle()                               *task-hub.toggle()*
+    Toggle the task hub sidebar.
+
+require('task-hub').open()                                   *task-hub.open()*
+    Open the task hub sidebar.
+
+require('task-hub').close()                                 *task-hub.close()*
+    Close the task hub sidebar.
+
+require('task-hub').refresh()                             *task-hub.refresh()*
+    Refresh the task list.
+
+require('task-hub').run_task_by_name({name})      *task-hub.run_task_by_name()*
+    Run a task by name.
+
+    Parameters: ~
+        {name}  (string) Task name
+
+require('task-hub').stop_task({name})                    *task-hub.stop_task()*
+    Stop a running task.
+
+    Parameters: ~
+        {name}  (string) Task name
+
+require('task-hub').get_task_names()                *task-hub.get_task_names()*
+    Get a list of all task names.
+
+    Returns: ~
+        (table) List of task names
+
+require('task-hub').get_task_status({name})          *task-hub.get_task_status()*
+    Get the status of a task.
+
+    Parameters: ~
+        {name}  (string) Task name
+
+    Returns: ~
+        (string) Status: 'idle', 'running', 'success', 'failed', or 'stopped'
+
+==============================================================================
+8. KEYMAPS                                                  *task-hub-keymaps*
+
+Default keymaps in the Task Hub window:
+
+    <CR>        Run task under cursor
+    <Space>     Expand/collapse group or composite task
+    K           Kill task under cursor (if running)
+    r           Refresh task list
+    q           Close Task Hub
+
+Global keymap (default):
+
+    <leader>th  Toggle Task Hub
+
+==============================================================================
+9. EXAMPLES                                                *task-hub-examples*
+
+BASIC WORKFLOW ~
+>
+    return {
+      tasks = {
+        { name = "Install", command = "npm install" },
+        { name = "Dev", command = "npm run dev" },
+        { name = "Build", command = "npm run build" },
+      },
+    }
+<
+
+CI/CD PIPELINE ~
+>
+    return {
+      tasks = {
+        { name = "Lint", command = "npm run lint" },
+        { name = "Test", command = "npm test" },
+        { name = "Build", command = "npm run build" },
+
+        {
+          name = "CI Pipeline",
+          type = "composite",
+          execution = "serial",
+          stopOnError = true,
+          tasks = { "Lint", "Test", "Build" },
+        },
+      },
+    }
+<
+
+MULTI-ENVIRONMENT DEPLOYMENT ~
+>
+    return {
+      tasks = {
+        {
+          name = "Deploy",
+          command = "kubectl apply -f k8s/ --namespace ${input:namespace}",
+          env = {
+            ENVIRONMENT = "${input:environment}",
+          },
+        },
+      },
+
+      inputs = {
+        environment = {
+          type = "select",
+          prompt = "Select environment:",
+          options = { "dev", "staging", "production" },
+          default = "dev",
+        },
+        namespace = {
+          type = "prompt",
+          prompt = "Enter namespace:",
+          default = "default",
+        },
+      },
+    }
+<
+
+==============================================================================
+vim:tw=78:ts=8:ft=help:norl:
