@@ -252,7 +252,7 @@ function M.build_display_lines()
   return lines
 end
 
--- Add composite subtasks to display
+-- Add composite subtasks to display (recursive for infinite nesting)
 function M.add_composite_subtasks(lines, task, indent, level)
   local cfg = config.get()
 
@@ -271,10 +271,23 @@ function M.add_composite_subtasks(lines, task, indent, level)
     local connector = is_last and '└─' or '├─'
 
     if subtask then
+      local status = executor.get_task_status(subtask.name)
       local icon = M.get_task_icon(subtask)
-      local line = string.format('%s%s %s %s', indent, connector, icon, subtask_name)
+
+      -- Add composite indicator for subtasks
+      local composite_indicator = subtask.type == 'composite' and ' ' .. cfg.icons.composite or ''
+      local line = string.format('%s%s %s %s%s', indent, connector, icon, subtask_name, composite_indicator)
+
       table.insert(lines, line)
       M.line_to_item[line_num] = { type = 'subtask', task = subtask, parent = task.name, level = level }
+
+      -- Recursively show nested composite subtasks if expanded
+      if subtask.type == 'composite' and M.expanded_composites[subtask.name] then
+        -- Calculate new indent: add vertical line continuation if not last, or space if last
+        local continuation = is_last and '  ' or '│ '
+        local new_indent = indent .. continuation
+        M.add_composite_subtasks(lines, subtask, new_indent, level + 1)
+      end
     else
       local line = string.format('%s%s %s %s (not found)', indent, connector, cfg.icons.task_failed, subtask_name)
       table.insert(lines, line)

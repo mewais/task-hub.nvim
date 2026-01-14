@@ -141,7 +141,7 @@ function M.get_task_icon(task, status)
   return config.icons.task_idle
 end
 
--- Get highlight group for a line based on content
+-- Get highlight group for a line based on content (supports infinite nesting)
 function M.get_line_highlight(line, item)
   local config = require('task-hub.config').get()
 
@@ -176,14 +176,22 @@ function M.get_line_highlight(line, item)
       return config.highlights.task_stopped
     end
 
-    -- Use level-based coloring for idle tasks
+    -- Use level-based coloring for idle tasks (infinite levels)
     local level = item.level or 0
+
+    -- Cycle through available level highlights
+    -- Level 0: Normal (brightest)
+    -- Level 1: Comment (dimmed)
+    -- Level 2+: NonText (most dimmed), alternates slightly for visual distinction
     if level == 0 then
       return config.highlights.task_level_0
     elseif level == 1 then
       return config.highlights.task_level_1
     else
-      return config.highlights.task_level_2
+      -- For deeper levels, alternate between level_2 and level_3 for distinction
+      -- Even levels (2, 4, 6...) use task_level_2
+      -- Odd levels (3, 5, 7...) use task_level_3
+      return (level % 2 == 0) and config.highlights.task_level_2 or config.highlights.task_level_3
     end
   end
 
