@@ -24,7 +24,6 @@ M.defaults = {
   keymaps = {
     toggle = '<leader>th',        -- global keymap to toggle
     run_task = '<CR>',            -- run task under cursor
-    close = 'q',                  -- close task hub
     refresh = 'r',                -- refresh task list
     kill_task = 'K',              -- kill task under cursor
     toggle_expand = '<Space>',    -- expand/collapse groups

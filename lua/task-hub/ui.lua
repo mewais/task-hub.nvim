@@ -66,11 +66,6 @@ function M.setup_keymaps()
   vim.keymap.set('n', cfg.keymaps.refresh, function()
     M.refresh()
   end, vim.tbl_extend('force', opts, { desc = 'Refresh tasks' }))
-
-  -- Close
-  vim.keymap.set('n', cfg.keymaps.close, function()
-    require('task-hub').close()
-  end, vim.tbl_extend('force', opts, { desc = 'Close Task Hub' }))
 end
 
 -- Find existing sidebar window (generic detection)
@@ -190,12 +185,12 @@ function M.build_display_lines()
   local cfg = config.get()
 
   -- Header
-  table.insert(lines, '╭─── Task Hub ────────────────╮')
-  table.insert(lines, '│                             │')
+  table.insert(lines, 'Task Hub')
+  table.insert(lines, '')
 
   if not M.tasks_module or not M.tasks_module.tasks or #M.tasks_module.tasks == 0 then
-    table.insert(lines, '│  No tasks defined           │')
-    table.insert(lines, '│                             │')
+    table.insert(lines, 'No tasks defined')
+    table.insert(lines, '')
   else
     local organized = parser.organize_tasks(M.tasks_module)
 
@@ -206,7 +201,7 @@ function M.build_display_lines()
       local has_inputs = M.task_has_inputs(task) and ' ' .. cfg.icons.has_inputs or ''
       local composite = task.type == 'composite' and ' ' .. cfg.icons.composite or ''
 
-      local line = string.format('│ %s %s%s%s', icon, task.name, has_inputs, composite)
+      local line = string.format('%s %s%s%s', icon, task.name, has_inputs, composite)
       table.insert(lines, line)
       M.line_to_item[line_num] = { type = 'task', task = task }
 
@@ -219,14 +214,14 @@ function M.build_display_lines()
     -- Display grouped tasks
     if next(organized.grouped) then
       if #organized.ungrouped > 0 then
-        table.insert(lines, '│                             │')
+        table.insert(lines, '')
       end
 
       for group_name, tasks in pairs(organized.grouped) do
         local line_num = #lines + 1
         local group_icon = M.expanded_groups[group_name] and cfg.icons.group_expanded or cfg.icons.group_collapsed
 
-        local line = string.format('│ %s %s', group_icon, group_name)
+        local line = string.format('%s %s', group_icon, group_name)
         table.insert(lines, line)
         M.line_to_item[line_num] = { type = 'group', name = group_name }
 
@@ -238,7 +233,7 @@ function M.build_display_lines()
             local has_inputs = M.task_has_inputs(task) and ' ' .. cfg.icons.has_inputs or ''
             local composite = task.type == 'composite' and ' ' .. cfg.icons.composite or ''
 
-            local task_line = string.format('│   %s %s%s%s', icon, task.name, has_inputs, composite)
+            local task_line = string.format('  %s %s%s%s', icon, task.name, has_inputs, composite)
             table.insert(lines, task_line)
             M.line_to_item[task_line_num] = { type = 'task', task = task }
 
@@ -250,15 +245,23 @@ function M.build_display_lines()
         end
       end
     end
-
-    table.insert(lines, '│                             │')
   end
 
-  -- Footer
-  table.insert(lines, '├─────────────────────────────┤')
-  table.insert(lines, '│ <CR>:run  <Space>:expand    │')
-  table.insert(lines, '│ K:kill  r:refresh  q:close  │')
-  table.insert(lines, '╰─────────────────────────────╯')
+  -- Get window height to fill remaining space
+  local win_height = M.win and vim.api.nvim_win_is_valid(M.win) and vim.api.nvim_win_get_height(M.win) or 20
+  local footer_lines = 3  -- separator + 2 help lines
+  local content_lines = #lines
+
+  -- Add empty lines to push footer to bottom
+  local padding_needed = win_height - content_lines - footer_lines
+  for i = 1, math.max(0, padding_needed) do
+    table.insert(lines, '')
+  end
+
+  -- Footer at the bottom
+  table.insert(lines, '─────────────────────────────')
+  table.insert(lines, '<CR>:run  <Space>:expand')
+  table.insert(lines, 'K:kill  r:refresh')
 
   return lines
 end
@@ -277,11 +280,11 @@ function M.add_composite_subtasks(lines, task, indent)
 
     if subtask then
       local icon = M.get_task_icon(subtask)
-      local line = string.format('│ %s├─ %s %s', indent, icon, subtask_name)
+      local line = string.format('%s├─ %s %s', indent, icon, subtask_name)
       table.insert(lines, line)
       M.line_to_item[line_num] = { type = 'subtask', task = subtask, parent = task.name }
     else
-      local line = string.format('│ %s├─ %s %s (not found)', indent, cfg.icons.task_failed, subtask_name)
+      local line = string.format('%s├─ %s %s (not found)', indent, cfg.icons.task_failed, subtask_name)
       table.insert(lines, line)
     end
   end
@@ -297,10 +300,10 @@ function M.refresh()
   local tasks_module, err = parser.load_tasks()
 
   if err then
-    -- Display error
+    -- Display error with box for emphasis
     vim.bo[M.buf].modifiable = true
     vim.api.nvim_buf_set_lines(M.buf, 0, -1, false, {
-      '╭─── Task Hub ────────────────╮',
+      '╭─── Task Hub Error ──────────╮',
       '│                             │',
       '│  Error loading tasks:       │',
       '│  ' .. err,
@@ -342,9 +345,14 @@ function M.apply_highlighting()
   for i, line in ipairs(lines) do
     local line_num = i - 1
 
-    -- Highlight borders and headers
-    if line:match('^╭') or line:match('^╰') or line:match('^├') then
+    -- Highlight header
+    if line:match('^Task Hub') then
       vim.api.nvim_buf_add_highlight(M.buf, ns, 'Title', line_num, 0, -1)
+    end
+
+    -- Highlight separator
+    if line:match('^─') then
+      vim.api.nvim_buf_add_highlight(M.buf, ns, 'Comment', line_num, 0, -1)
     end
 
     -- Highlight running tasks
