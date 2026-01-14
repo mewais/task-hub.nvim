@@ -182,8 +182,8 @@ function M.collect_inputs(task, inputs_config, callback)
   inputs_config = inputs_config or {}
   local parser = require('task-hub.parser')
 
-  -- Find all required inputs (in order of appearance)
-  local input_names = parser.find_input_references(task)
+  -- Find all required inputs (in order from inputs_config)
+  local input_names = parser.find_input_references(task, inputs_config)
 
   -- If no inputs required, call callback immediately
   if #input_names == 0 then

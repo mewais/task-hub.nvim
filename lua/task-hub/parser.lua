@@ -276,12 +276,51 @@ function M.get_task_by_name(tasks_module, name)
   return nil
 end
 
--- Find all input references in a task (preserves order of appearance)
-function M.find_input_references(task)
-  local references = {}
-  local seen = {}  -- Track which inputs we've already added
+-- Find all input references in a task (preserves order from task definition)
+function M.find_input_references(task, inputs_config)
+  -- If task has an explicit input_order field, use that
+  if task.input_order and type(task.input_order) == 'table' then
+    local references = {}
+    local used_inputs = {}
 
-  -- Helper to extract input names from string (in order of appearance)
+    -- Helper to check if input is actually used in the task
+    local function is_input_used(input_name)
+      local pattern = '%${input:' .. input_name:gsub('%-', '%%-') .. '}'
+
+      if task.command and task.command:find(pattern) then
+        return true
+      end
+
+      if task.env then
+        for _, value in pairs(task.env) do
+          if type(value) == 'string' and value:find(pattern) then
+            return true
+          end
+        end
+      end
+
+      if task.cwd and task.cwd:find(pattern) then
+        return true
+      end
+
+      return false
+    end
+
+    -- Use the specified order, but only include inputs that are actually used
+    for _, input_name in ipairs(task.input_order) do
+      if is_input_used(input_name) then
+        table.insert(references, input_name)
+        used_inputs[input_name] = true
+      end
+    end
+
+    return references
+  end
+
+  -- Fallback: extract in order of appearance
+  local references = {}
+  local seen = {}
+
   local function extract_inputs(str)
     if type(str) ~= 'string' then
       return
@@ -294,27 +333,25 @@ function M.find_input_references(task)
     end
   end
 
-  -- Check command first
+  -- Extract from command first
   if task.command then
     extract_inputs(task.command)
   end
 
-  -- Check environment variables in sorted key order for consistency
+  -- Extract from env variables (alphabetical order by key for consistency)
   if task.env then
-    -- Get env keys and sort them for deterministic order
     local env_keys = {}
     for key in pairs(task.env) do
       table.insert(env_keys, key)
     end
     table.sort(env_keys)
 
-    -- Extract inputs in sorted env key order
     for _, key in ipairs(env_keys) do
       extract_inputs(task.env[key])
     end
   end
 
-  -- Check cwd last
+  -- Extract from cwd last
   if task.cwd then
     extract_inputs(task.cwd)
   end
