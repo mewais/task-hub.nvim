@@ -47,11 +47,61 @@ function M.open_terminal()
   -- Save current window
   local original_win = vim.api.nvim_get_current_win()
 
-  -- Open terminal in configured position
+  -- Find the main editor window (not neo-tree, not task-hub, not floating)
+  local main_win = nil
+  for _, win in ipairs(vim.api.nvim_list_wins()) do
+    local win_buf = vim.api.nvim_win_get_buf(win)
+    local buftype = vim.bo[win_buf].buftype
+    local filetype = vim.bo[win_buf].filetype
+    local win_config = vim.api.nvim_win_get_config(win)
+
+    -- Skip special windows (neo-tree, task-hub, floating, etc)
+    if buftype == '' and filetype ~= 'neo-tree' and win_config.relative == '' then
+      main_win = win
+      break
+    end
+  end
+
+  -- If no main window found, use current window
+  if not main_win then
+    main_win = original_win
+  end
+
+  -- Open terminal in configured position (split relative to main window only)
   if term_config.position == 'bottom' then
-    vim.cmd('botright ' .. term_config.size .. 'split')
+    -- Use nvim API to create a window split relative to main window
+    M.terminal_win = vim.api.nvim_open_win(buf, true, {
+      split = 'below',
+      win = main_win,
+      height = term_config.size,
+    })
+
+    -- Configure terminal window
+    vim.wo[M.terminal_win].number = false
+    vim.wo[M.terminal_win].relativenumber = false
+
+    if not term_config.focus_on_run then
+      vim.api.nvim_set_current_win(original_win)
+    end
+
+    return M.terminal_win
   elseif term_config.position == 'right' then
-    vim.cmd('botright ' .. term_config.size .. 'vsplit')
+    -- Use nvim API to create a window split relative to main window
+    M.terminal_win = vim.api.nvim_open_win(buf, true, {
+      split = 'right',
+      win = main_win,
+      width = term_config.size,
+    })
+
+    -- Configure terminal window
+    vim.wo[M.terminal_win].number = false
+    vim.wo[M.terminal_win].relativenumber = false
+
+    if not term_config.focus_on_run then
+      vim.api.nvim_set_current_win(original_win)
+    end
+
+    return M.terminal_win
   elseif term_config.position == 'float' then
     local width = math.floor(vim.o.columns * 0.8)
     local height = math.floor(vim.o.lines * 0.8)
